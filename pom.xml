@@ -40,6 +40,9 @@
 		<module>core</module>
 		<module>boot3</module>
 		<module>boot2</module>
+		<module>data-core</module>
+		<module>data-boot2</module>
+		<module>data-boot3</module>
 	</modules>
 
 	<properties>

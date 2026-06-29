@@ -1,0 +1,3 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+com.library.support.orrai.data.autoconfigure.OrraiDataSourceAutoConfiguration,\
+com.library.support.orrai.data.autoconfigure.OrraiJpaAuditingAutoConfiguration
