@@ -13,7 +13,7 @@ Published to **Maven Central** under groupId `io.github.josesito1996`:
 | Module dir | artifactId | Target | Notes |
 |-----------|-----------|--------|-------|
 | (root) | `spring-boot-tool-kit-orrai-parent` | pom | reactor parent: modules, plugin mgmt, publishing |
-| `core/` | `spring-boot-tool-kit-orrai-core` | Java 11, **no Spring** | shared `BusinessException` hierarchy + `ValidationError` |
+| `core/` | `spring-boot-tool-kit-orrai-core` | Java 11, **no Spring** | shared `BusinessException` hierarchy + `ErrorCode` catalog + `ValidationError` |
 | `boot3/` | `spring-boot-tool-kit-orrai` *(legacy name)* | Java 17, jakarta | RFC 7807 `ProblemDetail`, `@AutoConfiguration` |
 | `boot2/` | `spring-boot-tool-kit-orrai-boot2` | Java 11, javax | custom `ApiError` DTO, `spring.factories` (Boot 2.5–2.7) |
 | `data-core/` | `spring-boot-tool-kit-orrai-data-core` | Java 11, **no Spring** | pagination/sort DTOs, `DataSourcePoolProperties`, `CurrentAuditor` SPI |
@@ -53,7 +53,9 @@ Publishing config lives in the **parent** `pom.xml` (`pluginManagement`): `centr
 Package root across all modules: `com.library.support.orrai` (differs from the Maven `groupId`).
 
 ### core (framework-agnostic)
-- `exception/BusinessException` — base `RuntimeException` carrying the HTTP status as a plain **`int`** (via `java.net.HttpURLConnection.HTTP_*` constants — keeps core Spring-free) plus a machine-readable `errorCode`. Constructors `(int, String, String)` and `(…, Throwable cause)`. Subclasses fix status+code: `ResourceNotFoundException` (404), `UnauthorizedException` (401), `ForbiddenException` (403), `InternalErrorException` (500). One handler covers all via the base type.
+- `exception/BusinessException` — base `RuntimeException` carrying the HTTP status as a plain **`int`** plus a machine-readable `errorCode`. Constructors `(int, String, String)` and `(…, Throwable cause)`, plus `ErrorCode`-based overloads `(ErrorCode)`, `(ErrorCode, message)`, `(ErrorCode, message, cause)` that derive the status/code/default-message from the enum. One handler covers all via the base type.
+- `exception/ErrorCode` — enum catalog of the common HTTP errors (400, 401, 403, 404, 500, 502, 503), each bundling its numeric status (via `java.net.HttpURLConnection.HTTP_*` constants — keeps core Spring-free), a stable `code`, and a client-safe `defaultMessage`. Single source of truth for the status/code/message triple.
+- Subclasses fix status+code by delegating to an `ErrorCode`: `ResourceNotFoundException` (404, `NOT_FOUND`), `UnauthorizedException` (401), `ForbiddenException` (403), `InternalErrorException` (500). 404 keeps the published `RESOURCE_NOT_FOUND` code.
 - `model/ValidationError` — plain immutable class (not a `record` — Java 11 floor) for per-field validation errors.
 
 ### boot3 (jakarta, Spring Boot 3)
@@ -68,7 +70,7 @@ Mirror of boot3 with Spring 5 idioms: `model/ApiError` DTO instead of `ProblemDe
 How the pieces connect: a consumer picks the module matching its Boot version → auto-config registers the advices → throwing any `BusinessException` (or hitting a Spring MVC error) yields a consistent error body with the matching status.
 
 ### Adding a new handled exception (the common change)
-Add a class in **`core`** `exception/` extending `BusinessException`, passing its status `int` + `errorCode` to `super(...)`. **No handler change** in either adapter — `handleBusinessException` covers all subclasses. Add a unit test in `core` (`BusinessExceptionTest`) and, if asserting the HTTP response, a case in the relevant adapter's `GlobalExceptionHandlerTest`.
+Add a class in **`core`** `exception/` extending `BusinessException`. If the status is one of the cataloged ones, add/reuse an `ErrorCode` constant and delegate via `super(ErrorCode.X, message)`; otherwise pass a raw status `int` + `errorCode` to `super(...)`. **No handler change** in either adapter — `handleBusinessException` covers all subclasses. Add a unit test in `core` (`BusinessExceptionTest`, plus `ErrorCodeTest` for new constants) and, if asserting the HTTP response, a case in the relevant adapter's `GlobalExceptionHandlerTest`.
 
 ### Consumer integration note
 Both adapters are **auto-configured** — consumers get the handlers just by adding the dependency, no component scanning. Beans are `@ConditionalOnMissingBean` (override by declaring your own). Handling activates only in a servlet web application; the constraint-violation handler only when Bean Validation is on the classpath.
