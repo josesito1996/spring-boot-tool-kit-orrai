@@ -7,7 +7,7 @@
 
 	<groupId>io.github.josesito1996</groupId>
 	<artifactId>spring-boot-tool-kit-orrai-parent</artifactId>
-	<version>0.2.1</version>
+	<version>0.2.3</version>
 	<packaging>pom</packaging>
 
 	<name>support-orrai-utils-parent</name>
