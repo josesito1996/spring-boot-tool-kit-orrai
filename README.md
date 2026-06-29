@@ -88,6 +88,7 @@ A second feature family, structured exactly like the exception one (agnostic `da
 Mirror modules differing only in the persistence namespace (`jakarta.persistence` vs `javax.persistence`), Hibernate version (6 vs 5), and auto-config registration (`AutoConfiguration.imports` + `@AutoConfiguration` vs `spring.factories` + `@Configuration`).
 - `jpa/BaseEntity` — `@MappedSuperclass`, `Long` id (`IDENTITY`), identity-based `equals`/`hashCode` safe across the transient→managed transition (constant `hashCode`).
 - `jpa/AuditableEntity extends BaseEntity` — `@EntityListeners(AuditingEntityListener)` with `createdAt`/`updatedAt` (`Instant`) and `createdBy`/`updatedBy` (`String`), filled automatically by Spring Data JPA auditing.
+- `jpa/AuditableFields` — same audit columns as `AuditableEntity` but **without `@Id`** (does not extend `BaseEntity`). Use it on entities that already own their primary key, to add auditing without the duplicate-identifier conflict that arises when an existing `@Id` collides with `BaseEntity`'s.
 - `jpa/SoftDeletableEntity extends AuditableEntity` — `deleted` flag + `deletedAt`, with `markDeleted()`/`restore()`. **No `@Where`** (Hibernate ignores it on a `@MappedSuperclass` and it behaves inconsistently across Hibernate 5/6); filtering is explicit via the repository finders below.
 - `repository/BaseRepository<T, ID>` (`@NoRepositoryBean extends JpaRepository`) and `repository/SoftDeleteRepository<T extends SoftDeletableEntity, ID>` adding `softDelete(entity)` plus derived active-row finders `findAllByDeletedFalse()` (+ `Pageable` overload), `findByIdAndDeletedFalse(id)`, `countByDeletedFalse()`. Inherited `findAll`/`findById` still see **all** rows (including deleted).
 - `support/PageMappers` — bridges `PageQuery`/`PageResponse` ⇄ Spring Data `Pageable`/`Page`.
@@ -115,6 +116,19 @@ public interface ClienteRepository extends BaseRepository<Cliente, Long> {}
 // or, for soft-delete: extends SoftDeleteRepository<Cliente, Long>
 ```
 
+If your entity already declares its own `@Id` (e.g. a legacy table), extend `AuditableFields` instead of `AuditableEntity` to get auditing without the id conflict:
+
+```java
+@Entity
+public class Cliente extends AuditableFields {       // auditing only; you own the id
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;                                  // any name/type/strategy
+    private String nombre;
+    // getters/setters
+}
+```
+
 Auditing is active out of the box (`createdAt`/`createdBy` filled on insert, `"system"` until you provide a `CurrentAuditor`). Optional properties:
 
 ```properties
@@ -134,4 +148,4 @@ Note: `spring-boot-starter-data-jpa` is an **optional** dependency of the adapte
 
 JUnit 5 with `@DisplayName`. `core` has plain unit tests (no Spring). Each adapter's `GlobalExceptionHandlerTest` drives the advice through **MockMvc standalone** against an inner `TestController`, asserting status + error-body JSON (incl. a regression test that the validation advice wins over the catch-all despite registration order). `ExceptionHandlingAutoConfigurationTest` uses `WebApplicationContextRunner`/`ApplicationContextRunner` for bean registration, `@ConditionalOnMissingBean` back-off, and non-web inactivity. Surefire/compiler/JUnit versions are pinned in the parent `pom.xml` (no `spring-boot-starter-parent` to supply them).
 
-For the data modules: `data-core` has plain JUnit 5 unit tests (`PageQueryTest`, `PageResponseTest` — clamping, offset, derived page flags, immutability). Each data adapter has a `@DataJpaTest` (`AuditingAndSoftDeleteTest`) running against **H2**, with a `TestDataApplication` (`@SpringBootApplication`, test-only) to bootstrap the slice and a `sample/` fixture entity+repository; it asserts that auditing fills `createdAt`/`createdBy` on insert and that `softDelete` hides rows from the active finders while the row is physically retained and flagged. Test classes must be named `*Test` (Surefire only; no Failsafe configured).
+For the data modules: `data-core` has plain JUnit 5 unit tests (`PageQueryTest`, `PageResponseTest` — clamping, offset, derived page flags, immutability). Each data adapter has a `@DataJpaTest` (`AuditingAndSoftDeleteTest`) running against **H2**, with a `TestDataApplication` (`@SpringBootApplication`, test-only) to bootstrap the slice and a `sample/` fixture entity+repository; it asserts that auditing fills `createdAt`/`createdBy` on insert and that `softDelete` hides rows from the active finders while the row is physically retained and flagged. A second `@DataJpaTest` (`AuditableFieldsTest`, with a `CustomIdAuditableEntity` fixture that declares its own `@Id`) verifies that `AuditableFields` adds auditing to an entity owning its primary key — no duplicate-id conflict — and that `updatedAt` advances on update while `createdAt` is preserved. Test classes must be named `*Test` (Surefire only; no Failsafe configured).
