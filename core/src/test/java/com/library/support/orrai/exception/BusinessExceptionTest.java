@@ -42,6 +42,39 @@ class BusinessExceptionTest {
         assertEquals("IM_A_TEAPOT", ex.getErrorCode());
     }
 
+    @Test
+    @DisplayName("ErrorCode constructor uses the enum's status, code and default message")
+    void errorCodeConstructor_usesEnumDefaults() {
+        BusinessException ex = new BusinessException(ErrorCode.SERVICE_UNAVAILABLE);
+
+        assertEquals(503, ex.getStatusCode());
+        assertEquals("SERVICE_UNAVAILABLE", ex.getErrorCode());
+        assertEquals(ErrorCode.SERVICE_UNAVAILABLE.getDefaultMessage(), ex.getMessage());
+        assertNull(ex.getCause());
+    }
+
+    @Test
+    @DisplayName("ErrorCode constructor overrides the default message while keeping status and code")
+    void errorCodeConstructor_overridesMessage() {
+        BusinessException ex = new BusinessException(ErrorCode.BAD_GATEWAY, "odds provider timed out");
+
+        assertEquals(502, ex.getStatusCode());
+        assertEquals("BAD_GATEWAY", ex.getErrorCode());
+        assertEquals("odds provider timed out", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("ErrorCode constructor with cause keeps the original throwable")
+    void errorCodeConstructor_keepsCause() {
+        Throwable cause = new IllegalStateException("socket closed");
+        BusinessException ex = new BusinessException(ErrorCode.INTERNAL_ERROR, "boom", cause);
+
+        assertEquals(500, ex.getStatusCode());
+        assertEquals("INTERNAL_ERROR", ex.getErrorCode());
+        assertEquals("boom", ex.getMessage());
+        assertSame(cause, ex.getCause());
+    }
+
     private void assertStatusAndCode(BusinessException ex, int expectedStatus, String expectedCode) {
         assertEquals(expectedStatus, ex.getStatusCode());
         assertEquals(expectedCode, ex.getErrorCode());

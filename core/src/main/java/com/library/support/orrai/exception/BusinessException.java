@@ -29,6 +29,21 @@ public class BusinessException extends RuntimeException {
         this.errorCode = errorCode;
     }
 
+    /** Builds an exception from an {@link ErrorCode}, using its default client-safe message. */
+    public BusinessException(ErrorCode errorCode) {
+        this(errorCode.getStatusCode(), errorCode.getCode(), errorCode.getDefaultMessage(), null);
+    }
+
+    /** Builds an exception from an {@link ErrorCode}, overriding its default message. */
+    public BusinessException(ErrorCode errorCode, String message) {
+        this(errorCode.getStatusCode(), errorCode.getCode(), message, null);
+    }
+
+    /** Builds an exception from an {@link ErrorCode} with a custom message and a logged cause. */
+    public BusinessException(ErrorCode errorCode, String message, Throwable cause) {
+        this(errorCode.getStatusCode(), errorCode.getCode(), message, cause);
+    }
+
     public int getStatusCode() {
         return statusCode;
     }

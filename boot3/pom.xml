@@ -8,7 +8,7 @@
 	<parent>
 		<groupId>io.github.josesito1996</groupId>
 		<artifactId>spring-boot-tool-kit-orrai-parent</artifactId>
-		<version>0.2.0</version>
+		<version>0.2.1</version>
 	</parent>
 
 	<!-- Keeps the legacy published coordinate so existing Spring Boot 3 consumers are unaffected. -->

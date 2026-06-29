@@ -1,7 +1,5 @@
 package com.library.support.orrai.exception;
 
-import java.net.HttpURLConnection;
-
 /**
  * Thrown for explicit, known internal failures. Maps to HTTP 500 (INTERNAL SERVER ERROR).
  *
@@ -14,10 +12,10 @@ public class InternalErrorException extends BusinessException {
     private static final long serialVersionUID = 1L;
 
     public InternalErrorException(String message) {
-        super(HttpURLConnection.HTTP_INTERNAL_ERROR, "INTERNAL_ERROR", message);
+        super(ErrorCode.INTERNAL_ERROR, message);
     }
 
     public InternalErrorException(String message, Throwable cause) {
-        super(HttpURLConnection.HTTP_INTERNAL_ERROR, "INTERNAL_ERROR", message, cause);
+        super(ErrorCode.INTERNAL_ERROR, message, cause);
     }
 }
