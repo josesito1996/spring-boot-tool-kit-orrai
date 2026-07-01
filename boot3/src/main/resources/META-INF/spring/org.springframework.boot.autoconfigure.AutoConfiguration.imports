@@ -1,1 +1,2 @@
 com.library.support.orrai.autoconfigure.ExceptionHandlingAutoConfiguration
+com.library.support.orrai.autoconfigure.OrraiHttpAutoConfiguration

@@ -142,7 +142,172 @@ orrai.datasource.minimum-idle=5
 orrai.jpa.auditing.enabled=false
 ```
 
+**Pagination without depending on Spring Data** — accept/return the agnostic `PageQuery`/`PageResponse` DTOs and bridge them with `PageMappers`:
+
+```java
+@Service
+public class ClienteService {
+
+    private final ClienteRepository repository;   // extends SoftDeleteRepository<Cliente, Long>
+
+    ClienteService(ClienteRepository repository) {
+        this.repository = repository;
+    }
+
+    // query = PageQuery.of(0, 20) or PageQuery.of(0, 20, List.of(new SortOrder("nombre", Direction.ASC)))
+    public PageResponse<Cliente> listActive(PageQuery query) {
+        Pageable pageable = PageMappers.toPageable(query);
+        Page<Cliente> page = repository.findAllByDeletedFalse(pageable);  // hides soft-deleted rows
+        return PageMappers.toPageResponse(page);   // content + totalPages/first/last/empty
+    }
+
+    public Cliente softDelete(Long id) {
+        Cliente cliente = repository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Cliente " + id));
+        repository.softDelete(cliente);   // flags deleted=true + deletedAt; row physically retained
+        return cliente;
+    }
+}
+```
+
+`PageResponse<T>` is a plain immutable DTO (`content`, `page`, `size`, `totalElements`, `totalPages`, `first`, `last`, `empty`), safe to return directly from a controller as JSON without leaking Spring Data types.
+
 Note: `spring-boot-starter-data-jpa` is an **optional** dependency of the adapters (not propagated transitively) — your JPA app already provides it.
+
+## Outbound HTTP client (boot3)
+
+A third feature family: an auto-configured, multi-client HTTP consumer. Framework-agnostic **port** in `core` (`http/OrraiHttpClient` — pure `execute(...)` contract, no Spring), Spring Boot 3 **adapter** in `boot3` backed by `RestClient`. All `4xx`/`5xx` and transport failures map centrally to `core` `exception/OrraiHttpClientException` (the transport never leaks to the consumer).
+
+- `http/RestClientOrraiHttpClient` — `RestClient` adapter; `http/RetryingOrraiHttpClient` + `RetryPolicy` — transport-agnostic retry decorator (fixed delay, retryable status codes, optional transport-error retry).
+- `http/OrraiHttpClientFactory` — builds a per-client `RestClient` (own base URL + connect/read timeouts) using the Spring Boot 4 **`org.springframework.boot.http.client`** API (`HttpClientSettings.defaults()` + `ClientHttpRequestFactoryBuilder.detect()`). **`boot3` now targets Spring Boot 4.0.0** (`spring-boot.version=4.0.0`, Java 21); the other modules (`boot2`, `data-*`, `core`) keep their previous Boot versions and stay compatible. The migration follows Boot 4's package moves: `RestClientAutoConfiguration` → `org.springframework.boot.restclient.autoconfigure` (`spring-boot-restclient`), `WebMvcAutoConfiguration` → `org.springframework.boot.webmvc.autoconfigure`, and the old `ClientHttpRequestFactorySettings` → `HttpClientSettings` (`spring-boot-http-client`). Both `spring-boot-restclient` and `spring-boot-http-client` are added as **optional** dependencies.
+- `http/OrraiHttpClientRegistry` — resolves clients by name (`registry.client("payments")`); the default client is also the `@Primary OrraiHttpClient` bean. `autoconfigure/OrraiHttpAutoConfiguration` binds `orrai.http.*` and registers everything.
+
+### Consumer usage
+
+**1. Add the dependency** (Spring Boot 4; brings `core` transitively):
+
+```xml
+<dependency>
+  <groupId>io.github.josesito1996</groupId>
+  <artifactId>spring-boot-tool-kit-orrai</artifactId>
+  <version>0.2.4</version>
+</dependency>
+```
+
+**2. Configure clients** in `application.properties` — a default one and any number of named ones:
+
+```properties
+# Default / primary client -> injectable directly as OrraiHttpClient
+orrai.http.client.base-url=https://api.example.com
+orrai.http.client.connect-timeout=2s
+orrai.http.client.read-timeout=5s
+orrai.http.client.max-retries=3
+orrai.http.client.retry-delay=500ms
+
+# Named clients -> resolved via OrraiHttpClientRegistry.client("<name>")
+orrai.http.clients.google-maps-elevation.base-url=https://maps.googleapis.com/maps/api/elevation
+orrai.http.clients.google-maps-elevation.read-timeout=10s
+orrai.http.clients.google-maps-geocode.base-url=https://maps.googleapis.com/maps/api/geocode
+```
+
+**3a. Inject the default client directly** (it is the `@Primary OrraiHttpClient` bean):
+
+```java
+@Service
+public class UserService {
+
+    private final OrraiHttpClient http;
+
+    UserService(OrraiHttpClient http) {   // the default client
+        this.http = http;
+    }
+
+    public UserDto findUser(long id) {
+        // GET https://api.example.com/users/{id}  ->  deserialized into UserDto
+        return http.execute(
+                "/users/" + id,   // path (appended to base-url)
+                "GET",            // method (case-insensitive)
+                null,             // headers   (Map<String,String> or null)
+                null,             // queryParams (Map<String,String> or null)
+                null,             // body      (null for GET)
+                UserDto.class);   // response type
+    }
+}
+```
+
+**3b. Resolve named clients** through the registry when you talk to several downstreams:
+
+```java
+@Service
+public class GoogleMapsServiceV2 {
+
+    private final OrraiHttpClient elevation;
+    private final OrraiHttpClient geocode;
+
+    GoogleMapsServiceV2(OrraiHttpClientRegistry registry) {
+        this.elevation = registry.client("google-maps-elevation");
+        this.geocode   = registry.client("google-maps-geocode");
+    }
+
+    public GeocodeResponse geocode(String address) {
+        return geocode.execute(
+                "/json", "GET",
+                Map.of("Accept", "application/json"),          // headers
+                Map.of("address", address, "key", apiKey),     // query params
+                null,
+                GeocodeResponse.class);
+    }
+
+    public ElevationResponse elevation(String locations) {
+        return elevation.execute("/json", "GET", null,
+                Map.of("locations", locations, "key", apiKey),
+                null, ElevationResponse.class);
+    }
+}
+```
+
+**3c. Collections / generic responses** — a `Class<R>` cannot express a generic type like `List<UserDto>` (type erasure). Use the second `execute` overload with an `OrraiTypeRef<R>` super type token, created as an **anonymous subclass** so the generic argument is retained:
+
+```java
+List<UserDto> users = http.execute(
+        "/users", "GET", null, null, null,
+        new OrraiTypeRef<List<UserDto>>() {});   // note the trailing {} — anonymous subclass
+```
+
+`OrraiTypeRef` lives in the Spring-free `core`; the `RestClient` adapter translates it to Spring's `ParameterizedTypeReference` internally. It works the same through the `@Primary` client, the registry, and with retries enabled. For a flat array you can still use the simpler `Class` form (`UserDto[].class`) and wrap with `List.of(...)`.
+
+**4. Error handling** — every `4xx`/`5xx` or transport failure surfaces as a single `OrraiHttpClientException` (never a `RestClient`/transport exception). It carries a **snapshot of the error response** — status, path, raw body and headers — captured while the transport stream was still open, so you can process the error response *after* the exchange has closed:
+
+```java
+try {
+    return userService.findUser(id);
+} catch (OrraiHttpClientException ex) {
+    int status = ex.getUpstreamStatusCode();                       // e.g. 404 (0 = transport failure)
+    String body = ex.getResponseBody();                            // raw error body (may be null)
+    Map<String, List<String>> headers = ex.getResponseHeaders();   // unmodifiable, never null
+
+    List<String> retryAfter  = headers.get("Retry-After");         // null if absent
+    List<String> contentType = headers.get("Content-Type");
+
+    log.warn("Upstream failed: status={} path={} contentType={} body={}",
+            status, ex.getRequestPath(), contentType, body);
+    throw new ResourceNotFoundException("User " + id + " not available");
+}
+```
+
+> **Why a snapshot, not the live `ClientHttpResponse`?** The transport's `ClientHttpResponse` (and its body `InputStream`) is closed as soon as the exchange completes, so it cannot be safely retained past the failure. The adapter therefore reads status + headers + body at error time and exposes them on the exception. **Transport-level failures** (connection/timeout — no response received) map to `getUpstreamStatusCode() == 0`, `getResponseBody() == null` and an empty `getResponseHeaders()`.
+
+The single `OrraiHttpClientException` distinguishes three failure modes so the message is always accurate:
+
+| Failure | Trigger | `getUpstreamStatusCode()` | Message |
+|---------|---------|---------------------------|---------|
+| **Upstream error** | Response arrived with a `4xx`/`5xx` status | the real status (e.g. `404`) | `Upstream call to '<path>' failed with status <n>` |
+| **Transport error** | Could not reach/read the server (connection refused, timeout) — Spring `ResourceAccessException` | `0` | `Unable to reach upstream service at '<path>'` |
+| **Deserialization error** | Response arrived `2xx` but its body could not be mapped into the requested type — Jackson `MismatchedInputException` (JSON shape ≠ target type) | `0` | `Response from '<path>' could not be deserialized into the requested type` |
+
+If you hit the **deserialization** case, the fix is on the consumer side: make the target type match the actual JSON — use `new OrraiTypeRef<List<Foo>>() {}` (or `Foo[].class`) when the payload is an array, and add `@JsonIgnoreProperties(ignoreUnknown = true)` to tolerate extra fields. The original Jackson error is preserved as the exception's `cause`.
+
+Retries (when `max-retries > 0`) are applied automatically by the `RetryingOrraiHttpClient` decorator for the configured `retryable-status-codes` (default `408,429,500,502,503,504`) and, when `retry-on-transport-error=true`, for connection/timeout failures.
 
 ## Testing approach
 
