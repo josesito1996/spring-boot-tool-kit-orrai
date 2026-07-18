@@ -11,14 +11,17 @@
 		<version>0.2.4-SNAPSHOT</version>
 	</parent>
 
-	<!-- Keeps the legacy published coordinate so existing Spring Boot 3 consumers are unaffected. -->
-	<artifactId>spring-boot-tool-kit-orrai</artifactId>
-	<name>support-orrai-utils</name>
-	<description>Spring Boot 3 (jakarta) adapter: auto-configured global exception handling producing RFC 7807 ProblemDetail responses</description>
+	<artifactId>spring-boot-tool-kit-orrai-vault</artifactId>
+	<name>support-orrai-vault</name>
+	<description>Spring Boot 3 (jakarta / Java 21) HashiCorp Vault adapter: zero-infrastructure secret custody backed by spring-cloud-vault. An EnvironmentPostProcessor injects sane spring.cloud.vault.* defaults and the vault:// config import so consumers only set spring.application.name and supply credentials via environment variables.</description>
 
 	<properties>
 		<maven.compiler.release>21</maven.compiler.release>
-		<spring-boot.version>4.0.0</spring-boot.version>
+		<!-- Consumers target Spring Boot 4.0+. spring-cloud-vault comes from the
+		     Spring Cloud 2025.1.x (Oakwood) train = spring-cloud-vault 5.0.x on
+		     Spring Framework 7 / Boot 4. Do NOT use 2025.0.x (incompatible with Boot 4.0.x). -->
+		<spring-boot.version>4.0.7</spring-boot.version>
+		<spring-cloud.version>2025.1.2</spring-cloud.version>
 	</properties>
 
 	<dependencyManagement>
@@ -30,50 +33,27 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
 	<dependencies>
+		<!-- Non-optional: "just add the module" must transitively pull spring-cloud-vault
+		     so consumers get zero-infrastructure secret custody. Version comes from the BOM. -->
 		<dependency>
-			<groupId>io.github.josesito1996</groupId>
-			<artifactId>spring-boot-tool-kit-orrai-core</artifactId>
-			<version>${project.version}</version>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-vault-config</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-restclient</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-http-client</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-validation</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.projectlombok</groupId>
-			<artifactId>lombok</artifactId>
-			<optional>true</optional>
-		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<!-- Shaded uber-jar: isolates WireMock's Jackson 2 / Jetty from Spring Boot 4's Jackson 3. -->
-		<dependency>
-			<groupId>org.wiremock</groupId>
-			<artifactId>wiremock-standalone</artifactId>
-			<version>3.13.1</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

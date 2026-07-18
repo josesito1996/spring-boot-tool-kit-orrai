@@ -43,6 +43,8 @@
 		<module>data-core</module>
 		<module>data-boot2</module>
 		<module>data-boot3</module>
+		<module>vault</module>
+		<module>config-client</module>
 	</modules>
 
 	<properties>

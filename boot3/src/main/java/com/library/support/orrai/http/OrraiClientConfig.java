@@ -3,6 +3,7 @@ package com.library.support.orrai.http;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -21,6 +22,9 @@ import java.util.Set;
  * @param retryDelay            fixed delay between retry attempts
  * @param retryableStatusCodes  upstream HTTP statuses that trigger a retry
  * @param retryOnTransportError whether connection/timeout failures (no response) are retried
+ * @param headers               additional headers sent on every request (optional); bound from
+ *                              {@code orrai.http.client.headers.<name>=<value>} — e.g. an API key or a
+ *                              static {@code X-Tenant-Id}. Never {@code null}; empty when unset
  */
 public record OrraiClientConfig(
         String baseUrl,
@@ -29,5 +33,10 @@ public record OrraiClientConfig(
         @DefaultValue("0") int maxRetries,
         @DefaultValue("500ms") Duration retryDelay,
         @DefaultValue({"408", "429", "500", "502", "503", "504"}) Set<Integer> retryableStatusCodes,
-        @DefaultValue("true") boolean retryOnTransportError) {
+        @DefaultValue("true") boolean retryOnTransportError,
+        Map<String, String> headers) {
+
+    public OrraiClientConfig {
+        headers = headers == null ? Map.of() : Map.copyOf(headers);
+    }
 }

@@ -25,6 +25,12 @@ public enum ErrorCode {
     /** HTTP 404 — the requested resource does not exist. */
     NOT_FOUND(HttpURLConnection.HTTP_NOT_FOUND, "RESOURCE_NOT_FOUND", "The requested resource was not found."),
 
+    /** HTTP 422 — the request is well-formed but fails semantic/business validation. */
+    UNPROCESSABLE_ENTITY(422, "UNPROCESSABLE_ENTITY", "The request could not be processed due to semantic errors."),
+
+    /** HTTP 429 — the client has sent too many requests in a given amount of time. */
+    TOO_MANY_REQUESTS(429, "TOO_MANY_REQUESTS", "Too many requests. Please try again later."),
+
     /** HTTP 500 — an unexpected internal failure. */
     INTERNAL_ERROR(HttpURLConnection.HTTP_INTERNAL_ERROR, "INTERNAL_ERROR", "An unexpected internal error occurred."),
 

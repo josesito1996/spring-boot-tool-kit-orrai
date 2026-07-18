@@ -32,10 +32,11 @@ public class OrraiHttpClientFactory {
                 .withReadTimeout(config.readTimeout());
         ClientHttpRequestFactory requestFactory = ClientHttpRequestFactoryBuilder.detect().build(settings);
 
-        RestClient restClient = builder.clone()
+        RestClient.Builder clientBuilder = builder.clone()
                 .baseUrl(config.baseUrl())
-                .requestFactory(requestFactory)
-                .build();
+                .requestFactory(requestFactory);
+        config.headers().forEach(clientBuilder::defaultHeader);
+        RestClient restClient = clientBuilder.build();
 
         OrraiHttpClient client = new RestClientOrraiHttpClient(restClient);
         if (config.maxRetries() <= 0) {

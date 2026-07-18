@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project
+		xmlns="http://maven.apache.org/POM/4.0.0"
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>io.github.josesito1996</groupId>
+		<artifactId>spring-boot-tool-kit-orrai-parent</artifactId>
+		<version>0.2.4-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>spring-boot-tool-kit-orrai-config-client</artifactId>
+	<name>support-orrai-config-client</name>
+	<description>Spring Boot 4 (jakarta / Java 21) Spring Cloud Config Server client starter: zero-infrastructure central configuration. An EnvironmentPostProcessor injects sane spring.cloud.config.* defaults and the configserver:// config import so consumers only set starter.config.uri (plus optional credentials) — no bootstrap.yml and no spring.config.import boilerplate. Retry, timeouts, fail-fast and @RefreshScope work out of the box.</description>
+
+	<properties>
+		<maven.compiler.release>21</maven.compiler.release>
+		<!-- Consumers target Spring Boot 4.0+. spring-cloud-config-client comes from the
+		     Spring Cloud 2025.1.x (Oakwood) train = spring-cloud-config 5.0.x on
+		     Spring Framework 7 / Boot 4. Do NOT use 2023.0.x/2024.0.x (Boot 3 trains):
+		     their spring-cloud-commons crashes on Boot 4 (WebServerInitializedEvent moved). -->
+		<spring-boot.version>4.0.7</spring-boot.version>
+		<spring-cloud.version>2025.1.2</spring-cloud.version>
+		<!-- spring-retry is not managed by either BOM; spring-cloud-config-client 5.0.x declares it
+		     optional at 2.0.13, so we pin that exact version to enable Config Server retry out of the box. -->
+		<spring-retry.version>2.0.13</spring-retry.version>
+	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-dependencies</artifactId>
+				<version>${spring-boot.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<dependencies>
+		<!-- Non-optional: "just add the module" must transitively pull the Config Server client
+		     so consumers get zero-infrastructure central config. Version comes from the BOM. -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-config</artifactId>
+		</dependency>
+
+		<!-- Enables Config Server retry out of the box (spec: automatic retry). spring-cloud-config-client
+		     declares spring-retry optional, so it must be requested explicitly; version pinned above. -->
+		<dependency>
+			<groupId>org.springframework.retry</groupId>
+			<artifactId>spring-retry</artifactId>
+			<version>${spring-retry.version}</version>
+		</dependency>
+
+		<!-- Actuator (refresh/env/configprops/health) — optional: enabled only when the consumer
+		     already provides it, never forced onto every service. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+			<optional>true</optional>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-gpg-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.sonatype.central</groupId>
+				<artifactId>central-publishing-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+</project>
