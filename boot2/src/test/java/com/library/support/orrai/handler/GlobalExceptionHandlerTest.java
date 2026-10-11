@@ -1,15 +1,22 @@
 package com.library.support.orrai.handler;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
+import com.library.support.orrai.exception.BusinessException;
 import com.library.support.orrai.exception.ForbiddenException;
 import com.library.support.orrai.exception.InternalErrorException;
 import com.library.support.orrai.exception.ResourceNotFoundException;
 import com.library.support.orrai.exception.UnauthorizedException;
+import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
 import javax.validation.ConstraintViolationException;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
@@ -104,8 +111,57 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.errors[0].field").value("name"));
     }
 
+    @Test
+    @DisplayName("BusinessException without properties -> body identical to 0.2.4, field by field")
+    void noProperties_bodyUnchangedFrom024() throws Exception {
+        String body = mockMvc.perform(get("/not-found"))
+                .andReturn().getResponse().getContentAsString();
+
+        Map<String, Object> json = JsonPath.read(body, "$");
+        assertEquals(new HashSet<>(Arrays.asList("timestamp", "status", "errorCode", "message", "path")),
+                json.keySet());
+        assertEquals(404, json.get("status"));
+        assertEquals("RESOURCE_NOT_FOUND", json.get("errorCode"));
+        assertEquals("Resource not Found", json.get("message"));
+        assertEquals("/not-found", json.get("path"));
+        Instant.parse((String) json.get("timestamp"));
+    }
+
+    @Test
+    @DisplayName("BusinessException with a property -> key appears verbatim, Long rendered as a number")
+    void withProperty_addedToBodyWithExactKeyAndType() throws Exception {
+        mockMvc.perform(get("/duplicate"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("DOCUMENTO_DUPLICADO"))
+                .andExpect(jsonPath("$.message").value("documento ya registrado"))
+                .andExpect(jsonPath("$.paciente_id").isNumber())
+                .andExpect(jsonPath("$.paciente_id").value(42))
+                .andExpect(jsonPath("$.pacienteId").doesNotExist())
+                .andExpect(jsonPath("$.properties").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("BusinessException with a null-valued property -> key absent from body")
+    void withNullProperty_keyAbsent() throws Exception {
+        mockMvc.perform(get("/null-property"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.paciente_id").doesNotExist());
+    }
+
     @RestController
     static class TestController {
+
+        @GetMapping("/duplicate")
+        void duplicate() {
+            throw new BusinessException(409, "DOCUMENTO_DUPLICADO", "documento ya registrado")
+                    .withProperty("paciente_id", 42L);
+        }
+
+        @GetMapping("/null-property")
+        void nullProperty() {
+            throw new BusinessException(409, "DOCUMENTO_DUPLICADO", "documento ya registrado")
+                    .withProperty("paciente_id", null);
+        }
 
         @GetMapping("/not-found")
         void notFound() {

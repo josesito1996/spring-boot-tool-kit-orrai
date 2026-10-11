@@ -59,7 +59,7 @@ conexión/retry/timeout en cada servicio. El desarrollador solo declara la depen
 <dependency>
   <groupId>io.github.josesito1996</groupId>
   <artifactId>spring-boot-tool-kit-orrai-config-client</artifactId>
-  <version>0.2.4</version>
+  <version>0.2.5</version>
 </dependency>
 ```
 

@@ -37,7 +37,8 @@ import java.util.List;
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     /**
-     * Handles any {@link BusinessException}, mapping its status and error code into the response.
+     * Handles any {@link BusinessException}, mapping its status and error code into the response,
+     * plus any extra {@link BusinessException#getProperties() properties} as top-level members.
      * When a cause is attached it is logged at error level (with stack trace) but never exposed.
      */
     @ExceptionHandler(BusinessException.class)
@@ -47,7 +48,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         } else {
             log.warn("Business exception [{}]: {}", ex.getErrorCode(), ex.getMessage());
         }
-        return ProblemDetails.create(ex.getStatusCode(), ex.getMessage(), ex.getErrorCode(), request);
+        ProblemDetail problem = ProblemDetails.create(ex.getStatusCode(), ex.getMessage(), ex.getErrorCode(), request);
+        ex.getProperties().forEach(problem::setProperty);
+        return problem;
     }
 
     /**

@@ -1,11 +1,25 @@
 package com.library.support.orrai.exception;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class BusinessExceptionTest {
 
@@ -73,6 +87,94 @@ class BusinessExceptionTest {
         assertEquals("INTERNAL_ERROR", ex.getErrorCode());
         assertEquals("boom", ex.getMessage());
         assertSame(cause, ex.getCause());
+    }
+
+    @Test
+    @DisplayName("without properties, getProperties() is empty")
+    void properties_emptyByDefault() {
+        assertTrue(new BusinessException(409, "CONFLICT", "dup").getProperties().isEmpty());
+    }
+
+    @Test
+    @DisplayName("withProperty returns the same instance and keeps insertion order")
+    void withProperty_fluentAndOrdered() {
+        BusinessException ex = new BusinessException(409, "DOCUMENTO_DUPLICADO", "dup");
+
+        BusinessException returned = ex.withProperty("paciente_id", 42L).withProperty("a", "x").withProperty("b", 1);
+
+        assertSame(ex, returned);
+        assertEquals(Arrays.asList("paciente_id", "a", "b"), new ArrayList<>(ex.getProperties().keySet()));
+        assertEquals(42L, ex.getProperties().get("paciente_id"));
+    }
+
+    @Test
+    @DisplayName("subclasses inherit withProperty")
+    void withProperty_worksOnSubclasses() {
+        BusinessException ex = new ResourceNotFoundException("nope").withProperty("id", 7);
+
+        assertTrue(ex instanceof ResourceNotFoundException);
+        assertEquals(7, ex.getProperties().get("id"));
+    }
+
+    @Test
+    @DisplayName("a null value does not add the key")
+    void withProperty_nullValueIsIgnored() {
+        BusinessException ex = new BusinessException(409, "CONFLICT", "dup").withProperty("x", null);
+
+        assertFalse(ex.getProperties().containsKey("x"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"type", "title", "status", "detail", "instance",
+            "timestamp", "errorCode", "path", "errors", "message"})
+    @DisplayName("reserved keys are rejected")
+    void withProperty_reservedKeyRejected(String key) {
+        BusinessException ex = new BusinessException(409, "CONFLICT", "dup");
+
+        assertThrows(IllegalArgumentException.class, () -> ex.withProperty(key, "v"));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"  "})
+    @DisplayName("null or blank keys are rejected")
+    void withProperty_blankKeyRejected(String key) {
+        BusinessException ex = new BusinessException(409, "CONFLICT", "dup");
+
+        assertThrows(IllegalArgumentException.class, () -> ex.withProperty(key, "v"));
+    }
+
+    @Test
+    @DisplayName("getProperties() cannot be modified from outside")
+    void getProperties_isUnmodifiable() {
+        BusinessException ex = new BusinessException(409, "CONFLICT", "dup").withProperty("k", "v");
+        Map<String, Object> props = ex.getProperties();
+
+        assertThrows(UnsupportedOperationException.class, () -> props.put("other", 1));
+        assertThrows(UnsupportedOperationException.class, () -> props.remove("k"));
+        assertThrows(UnsupportedOperationException.class,
+                () -> new BusinessException(409, "C", "d").getProperties().put("x", 1));
+    }
+
+    @Test
+    @DisplayName("serialization round-trip succeeds even with non-serializable property values")
+    void serialization_roundTripDoesNotFail() throws Exception {
+        BusinessException ex = new BusinessException(409, "CONFLICT", "dup")
+                .withProperty("not_serializable", new Object());
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+            out.writeObject(ex);
+        }
+        BusinessException copy;
+        try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+            copy = (BusinessException) in.readObject();
+        }
+
+        assertEquals(409, copy.getStatusCode());
+        assertEquals("CONFLICT", copy.getErrorCode());
+        assertTrue(copy.getProperties().isEmpty());
+        assertEquals("v", copy.withProperty("k", "v").getProperties().get("k"));
     }
 
     private void assertStatusAndCode(BusinessException ex, int expectedStatus, String expectedCode) {

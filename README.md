@@ -71,7 +71,7 @@ Publishing config lives in the **parent** `pom.xml` (`pluginManagement`): `centr
 Package root across all modules: `com.library.support.orrai` (differs from the Maven `groupId`).
 
 ### core (framework-agnostic)
-- `exception/BusinessException` — base `RuntimeException` carrying the HTTP status as a plain **`int`** plus a machine-readable `errorCode`. Constructors `(int, String, String)` and `(…, Throwable cause)`, plus `ErrorCode`-based overloads `(ErrorCode)`, `(ErrorCode, message)`, `(ErrorCode, message, cause)` that derive the status/code/default-message from the enum. One handler covers all via the base type.
+- `exception/BusinessException` — base `RuntimeException` carrying the HTTP status as a plain **`int`** plus a machine-readable `errorCode`. Constructors `(int, String, String)` and `(…, Throwable cause)`, plus `ErrorCode`-based overloads `(ErrorCode)`, `(ErrorCode, message)`, `(ErrorCode, message, cause)` that derive the status/code/default-message from the enum. One handler covers all via the base type. `withProperty(key, value)` attaches extra response properties (insertion-ordered, `transient`, reserved keys rejected); both adapters' `handleBusinessException` append them to the body.
 - `exception/ErrorCode` — enum catalog of the common HTTP errors (400, 401, 403, 404, 500, 502, 503), each bundling its numeric status (via `java.net.HttpURLConnection.HTTP_*` constants — keeps core Spring-free), a stable `code`, and a client-safe `defaultMessage`. Single source of truth for the status/code/message triple.
 - Subclasses fix status+code by delegating to an `ErrorCode`: `ResourceNotFoundException` (404, `NOT_FOUND`), `UnauthorizedException` (401), `ForbiddenException` (403), `InternalErrorException` (500). 404 keeps the published `RESOURCE_NOT_FOUND` code.
 - `model/ValidationError` — plain immutable class (not a `record` — Java 11 floor) for per-field validation errors.
@@ -99,7 +99,7 @@ Both adapters are **auto-configured** — add the dependency and the handlers re
 <dependency>
   <groupId>io.github.josesito1996</groupId>
   <artifactId>spring-boot-tool-kit-orrai</artifactId>       <!-- Spring Boot 3/4; or -boot2 for Spring Boot 2.x -->
-  <version>0.2.4</version>
+  <version>0.2.5</version>
 </dependency>
 ```
 
@@ -112,6 +112,31 @@ throw new UnauthorizedException("Token inválido");       // 401  errorCode=UNAU
 // Status/code not in the ErrorCode catalog? Use the raw int constructor:
 throw new BusinessException(409, "CONFLICT", "Email ya registrado");   // 409
 ```
+
+**3. Need structured data in the error?** Chain `withProperty(key, value)` on any `BusinessException` (subclasses included). Each property is added as a top-level member of the body, next to the standard fields — no subclass, no extra `@RestControllerAdvice`:
+
+```java
+throw new BusinessException(409, "DOCUMENTO_DUPLICADO", "Ya existe un paciente con ese documento")
+        .withProperty("paciente_id", pacienteId);
+```
+
+```json
+{
+  "title": "Conflict",
+  "status": 409,
+  "detail": "Ya existe un paciente con ese documento",
+  "instance": "/pacientes/7",
+  "timestamp": "2026-10-11T18:42:05.848Z",
+  "errorCode": "DOCUMENTO_DUPLICADO",
+  "path": "/pacientes/7",
+  "paciente_id": 42
+}
+```
+
+- The key is written **verbatim** — it does not go through Jackson's naming strategy. Want snake_case? Write `paciente_id`.
+- A `null` value leaves the key **absent** (no `"paciente_id": null`).
+- Reserved keys throw `IllegalArgumentException`: `type`, `title`, `status`, `detail`, `instance`, `timestamp`, `errorCode`, `path`, `errors`, `message`.
+- The value goes to the client like the message: pass only client-safe data. Without properties the body is exactly the same as before.
 
 ## Data abstraction modules (JPA + JDBC)
 
@@ -228,7 +253,7 @@ A third feature family: an auto-configured, multi-client HTTP consumer. Framewor
 <dependency>
   <groupId>io.github.josesito1996</groupId>
   <artifactId>spring-boot-tool-kit-orrai</artifactId>
-  <version>0.2.4</version>
+  <version>0.2.5</version>
 </dependency>
 ```
 
@@ -373,7 +398,7 @@ A fourth feature family: **zero-infrastructure** secret loading backed by `sprin
 <dependency>
   <groupId>io.github.josesito1996</groupId>
   <artifactId>spring-boot-tool-kit-orrai-vault</artifactId>
-  <version>0.2.4</version>
+  <version>0.2.5</version>
 </dependency>
 ```
 
@@ -526,7 +551,7 @@ Package root `com.library.support.orrai.config`; full details in [`config-client
 <dependency>
   <groupId>io.github.josesito1996</groupId>
   <artifactId>spring-boot-tool-kit-orrai-config-client</artifactId>
-  <version>0.2.4</version>
+  <version>0.2.5</version>
 </dependency>
 ```
 

@@ -40,7 +40,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         } else {
             log.warn("Business exception [{}]: {}", ex.getErrorCode(), ex.getMessage());
         }
-        ApiError body = ApiErrorSupport.create(ex.getStatusCode(), ex.getMessage(), ex.getErrorCode(), request);
+        ApiError body = ApiErrorSupport.create(ex.getStatusCode(), ex.getMessage(), ex.getErrorCode(), request)
+                .withProperties(ex.getProperties());
         return ResponseEntity.status(ex.getStatusCode()).body(body);
     }
 
